@@ -1,0 +1,8 @@
+{
+  "name": "Ninjona's Epub Bionifier",
+  "version": "1.0.0",
+  "dependencies": {
+    "jsdom": "^24.0.0",
+    "jszip": "^3.10.1"
+  }
+}
