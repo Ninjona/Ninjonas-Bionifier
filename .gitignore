@@ -61,3 +61,4 @@ dist
 .yarn/install-state.gz
 .pnp.*
 /test scripts/bionifier.js
+/package-lock.json

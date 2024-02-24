@@ -1,8 +1,12 @@
 {
   "name": "Ninjona's Epub Bionifier",
   "version": "1.0.0",
+  "license": "CC BY-NC-SA 4.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ninjona/Ninjonas-Epub-Bionifier.git"
+  },
   "dependencies": {
-    "jsdom": "^24.0.0",
     "jszip": "^3.10.1"
   }
 }

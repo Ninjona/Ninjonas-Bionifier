@@ -2,7 +2,8 @@ const JSZip = require('jszip');
 const fs = require('fs');
 const path = require('path');
 
-const Prefs = {
+// Generic preferences (replace these with your actual preferences)
+const genericPrefs = {
     MAX_FIXATION_PARTS: 5,
     FIXATION_LOWER_BOUND: 3,
     BR_WORD_STEM_PERCENTAGE: 0.5,
@@ -28,7 +29,7 @@ function modifyEPUB(epubFilePath) {
         .then(async (epubFile) => {
             // Load the EPUB content into the zip instance
             const loadedZip = await JSZip.loadAsync(epubFile);
-            4
+
             // Apply strong tag modifications
             await applyStrongTag(loadedZip);
 
@@ -48,30 +49,41 @@ async function applyStrongTag(loadedZip) {
     for (const fileName in loadedZip.files) {
         if (fileName.endsWith('.xhtml') || fileName.endsWith('.html')) {
             console.log(`Processing file: ${fileName}`);
+
+            // Read the content of the xhtml file
             const fileContent = await loadedZip.files[fileName].async('string');
 
+            // Debugging: Output content before modification
+
+            // enhance HTML
             const modifiedContent = enhanceHTML(fileContent);
+
+            // Debugging: Output content after modification
+
+            // Update the content back into the zip
             loadedZip.file(fileName, modifiedContent);
         }
     }
 }
+
 
 function enhanceHTML(htmlString, contentStyle) {
     try {
         // Parse and enhance the HTML string
         const enhancedHTML = htmlString.replace(/>([^<]+)</g, (match, textContent) => {
             // Process the text content between tags
-            const highlightedTextContent = highlightText(textContent, Prefs);
+            const highlightedTextContent = highlightText(textContent, genericPrefs);
+// Return the enhanced text content without adding new tags
             return `>${highlightedTextContent}<`;
 
         }).replace(/<head>/, (match) => {
             // Inject dynamic styles for saccades into the head
             return `<head><style>
             [br-mode=on] span strong, [br-mode=on] span span {
-                opacity: var(--fixation-edge-opacity, ${Prefs.FIXATION_OPACITY});
+                opacity: var(--fixation-edge-opacity, ${genericPrefs.FIXATION_OPACITY});
             }
             span:not([fixation]) {
-                opacity: ${Prefs.NON_FIXATION_OPACITY};
+                opacity: ${genericPrefs.NON_FIXATION_OPACITY};
             }
         </style>`;
         }).replace(/<body>/, (match) => {
@@ -81,6 +93,7 @@ function enhanceHTML(htmlString, contentStyle) {
 
         return enhancedHTML;
     } catch (error) {
+        // Handle errors and log them
         console.error(error);
         // Return the original HTML in case of an error
         return htmlString;
@@ -90,7 +103,7 @@ function enhanceHTML(htmlString, contentStyle) {
         return textContent.replace(/\p{L}+/gu, (word) => {
             // Exclude modifying escaped characters
 
-            if (word === 'amp') {
+            if (word.includes('amp')) {
                 console.log(word);
                 return word;
             } else {
@@ -106,11 +119,14 @@ function enhanceHTML(htmlString, contentStyle) {
 
 }
 
+
+// Check if a file path is provided as a command-line argument
 const args = process.argv.slice(2);
 
 if (args.length !== 1) {
     console.error("Please provide the path to the EPUB file as a command-line argument.");
 } else {
     const epubFilePath = args[0];
+    // Call the functions based on your requirements
     modifyEPUB(epubFilePath);
 }
