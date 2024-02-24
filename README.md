@@ -29,3 +29,11 @@ This script owes much of its bionic formatting techniques to the [Jiffy-reader](
 ## Note
 
 This whole project is in the making so it might not make any sense yet. I am still learning so bare with me. I intend to implement many more formats and features. Any help or advice would be much appriciated! 
+
+
+
+
+[![CC BY-NC-SA 4.0][cc-by-nc-sa-shield]][cc-by-nc-sa]
+
+[cc-by-nc-sa]: http://creativecommons.org/licenses/by-nc-sa/4.0/
+[cc-by-nc-sa-shield]: https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey.svg
