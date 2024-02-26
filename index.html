@@ -76,6 +76,12 @@
             animation: pulsate 1.5s infinite alternate;
         }
 
+        #container.dragover {
+            background-color: #1F51FF;
+            border: 2px solid #fff;
+        }
+
+
         @keyframes pulsate {
             0% {
                 box-shadow: 0 0 .2rem #fff,
@@ -326,28 +332,39 @@
     }
 
     const Prefs = {
-        MAX_FIXATION_PARTS: 5,
-        FIXATION_LOWER_BOUND: 3,
-        BR_WORD_STEM_PERCENTAGE: 0.5,
-        NON_FIXATION_OPACITY: 1, // Opacity for non-fixation text
-        FIXATION_OPACITY: 0.2, // Opacity for fixation text
+        BR_WORD_STEM_PERCENTAGE: 0.5, // Percentage of the word stem to use for the fixation
     };
+
 
     async function modifyEPUB(epubFile, file) {
         if (epubFile instanceof ArrayBuffer) {
             try {
                 // Load the EPUB content into the zip instance
                 const loadedZip = await JSZip.loadAsync(epubFile);
-                const totalFiles = Object.keys(loadedZip.files).length;
+                let totalFiles = Object.keys(loadedZip.files).length;
                 let filesProcessed = 0;
 
-                function updateProgressBar() {
-                    filesProcessed++;
-                    progressBar.value = (filesProcessed / totalFiles) * 100;
+
+                const filesToProcess = Object.keys(loadedZip.files).filter(fileName =>
+                    fileName.endsWith('.xhtml') || fileName.endsWith('.html')
+                );
+
+                totalFiles = filesToProcess.length;
+
+                function processFile(fileName) {
+                    console.log(`Processing file: ${fileName}`);
+
+                    return loadedZip.files[fileName].async('string').then(fileContent => {
+                        const modifiedContent = bionizeHTML(fileContent);
+                        loadedZip.file(fileName, modifiedContent);
+                        filesProcessed++;
+                    });
                 }
 
-                await applyStrongTag(loadedZip, updateProgressBar);
-
+                for (const fileName of filesToProcess) {
+                    await processFile(fileName);
+                    progressBar.value = (filesProcessed / totalFiles) * 100;
+                }
                 // Generate the modified EPUB as a Blob
                 const modifiedEpubBlob = await loadedZip.generateAsync({type: "blob"});
                 const downloadLink = document.createElement('a');
@@ -367,50 +384,32 @@
         }
     }
 
-    async function applyStrongTag(loadedZip) {
-        const filesToProcess = Object.keys(loadedZip.files).filter(fileName =>
-            fileName.endsWith('.xhtml') || fileName.endsWith('.html')
-        );
 
-        const totalFiles = filesToProcess.length;
-        let filesProcessed = 0;
-
-        function processFile(fileName) {
-            console.log(`Processing file: ${fileName}`);
-
-            return loadedZip.files[fileName].async('string').then(fileContent => {
-                const modifiedContent = enhanceHTML(fileContent);
-                loadedZip.file(fileName, modifiedContent);
-                filesProcessed++;
-            });
-        }
-
-        for (const fileName of filesToProcess) {
-            await processFile(fileName);
-            progressBar.value = (filesProcessed / totalFiles) * 100;
-        }
-
-    }
-
-    function enhanceHTML(htmlString, contentStyle) {
+    function bionizeHTML(htmlString, contentStyle) {
         try {
-            // Parse and enhance the HTML string
             return htmlString.replace(/>([^<]+)</g, (match, textContent) => {
-                // Process the text content between tags
-                const highlightedTextContent = highlightText(textContent, Prefs);
-                return `>${highlightedTextContent}<`;
+                let highlightedTextContent = '';
 
-            }).replace(/<head>/, (match) => {
-                // Inject dynamic styles for saccades into the head
-                return `<head><style>
-            [br-mode=on] span strong, [br-mode=on] span span {
-                opacity: var(--fixation-edge-opacity, ${Prefs.FIXATION_OPACITY});
-            }
-            span:not([fixation]) {
-                opacity: ${Prefs.NON_FIXATION_OPACITY};
-            }
-        </style>`;
+                textContent.replace(/&[a-zA-Z0-9#]+;|\S+|\s+/g, (match) => {
+                    if (match.startsWith('&')) {
+                        console.log(match);
+                        highlightedTextContent += match;
+                    } else {
+                        const {length} = match;
+                        const brWordStemWidth = length > 3 ? Math.round(length * Prefs.BR_WORD_STEM_PERCENTAGE) : length;
+                        const firstHalf = match.slice(0, brWordStemWidth);
+                        const secondHalf = match.slice(brWordStemWidth);
+                        highlightedTextContent += `<span ${secondHalf.length ? '' : 'fixation="true"'}><strong>${firstHalf}</strong>${secondHalf.length ? `<span>${secondHalf}</span>` : ''}</span>`;
+                    }
+                });
+
+                return `>${highlightedTextContent}<`;
+                /* }).replace(/<head>/, (match) => {
+                     // Inject dynamic styles for saccades into the head
+                     return `<head>`; */
+
             }).replace(/<body>/, (match) => {
+                // Add the content style to the body tag
                 return `<body style="${contentStyle}">`;
             });
         } catch (error) {
@@ -419,21 +418,6 @@
         }
     }
 
-    function highlightText(textContent, Prefs) {
-        return textContent.replace(/\p{L}+/gu, (word) => {
-            // Exclude modifying escaped characters
-
-            if (word === 'amp') {
-                return word;
-            } else {
-                const {length} = word;
-                const brWordStemWidth = length > 3 ? Math.round(length * Prefs.BR_WORD_STEM_PERCENTAGE) : length;
-                const firstHalf = word.slice(0, brWordStemWidth);
-                const secondHalf = word.slice(brWordStemWidth);
-                return `<span ${secondHalf.length ? '' : 'fixation="true"'}><strong>${firstHalf}</strong>${secondHalf.length ? `<span>${secondHalf}</span>` : ''}</span>`;
-            }
-        });
-    }
 </script>
 </body>
 <footer style="position: fixed; bottom: 0; left: 0; padding: 10px;">

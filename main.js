@@ -2,13 +2,8 @@ const JSZip = require('jszip');
 const fs = require('fs');
 const path = require('path');
 
-// Generic preferences (replace these with your actual preferences)
-const genericPrefs = {
-    MAX_FIXATION_PARTS: 5,
-    FIXATION_LOWER_BOUND: 3,
-    BR_WORD_STEM_PERCENTAGE: 0.5,
-    NON_FIXATION_OPACITY: 1, // Opacity for non-fixation text
-    FIXATION_OPACITY: 0.2, // Opacity for fixation text
+const Prefs = {
+    BR_WORD_STEM_PERCENTAGE: 0.5, // Percentage of the word stem to use for the fixation
 };
 
 
@@ -27,16 +22,18 @@ function modifyEPUB(epubFilePath) {
         });
     })
         .then(async (epubFile) => {
-            // Load the EPUB content into the zip instance
             const loadedZip = await JSZip.loadAsync(epubFile);
+            for (const fileName in loadedZip.files) {
+                if (fileName.endsWith('.xhtml') || fileName.endsWith('.html')) {
+                    console.log(`Processing file: ${fileName}`);
 
-            // Apply strong tag modifications
-            await applyStrongTag(loadedZip);
+                    const fileContent = await loadedZip.files[fileName].async('string');
+                    const modifiedContent = bionizeHTML(fileContent);
+                    loadedZip.file(fileName, modifiedContent);
+                }
+            }
 
-            // Generate the modified EPUB as a Buffer
             const modifiedEpubBuffer = await loadedZip.generateAsync({type: "nodebuffer"});
-
-            // Save the modified EPUB with a new filename
             fs.writeFileSync(outputFilePath, modifiedEpubBuffer);
             console.log(`Modified EPUB saved to: ${outputFilePath}`);
         })
@@ -45,88 +42,45 @@ function modifyEPUB(epubFilePath) {
         });
 }
 
-async function applyStrongTag(loadedZip) {
-    for (const fileName in loadedZip.files) {
-        if (fileName.endsWith('.xhtml') || fileName.endsWith('.html')) {
-            console.log(`Processing file: ${fileName}`);
 
-            // Read the content of the xhtml file
-            const fileContent = await loadedZip.files[fileName].async('string');
-
-            // Debugging: Output content before modification
-
-            // enhance HTML
-            const modifiedContent = enhanceHTML(fileContent);
-
-            // Debugging: Output content after modification
-
-            // Update the content back into the zip
-            loadedZip.file(fileName, modifiedContent);
-        }
-    }
-}
-
-
-function enhanceHTML(htmlString, contentStyle) {
+function bionizeHTML(htmlString, contentStyle) {
     try {
-        // Parse and enhance the HTML string
-        const enhancedHTML = htmlString.replace(/>([^<]+)</g, (match, textContent) => {
-            // Process the text content between tags
-            const highlightedTextContent = highlightText(textContent, genericPrefs);
-// Return the enhanced text content without adding new tags
-            return `>${highlightedTextContent}<`;
+        return htmlString.replace(/>([^<]+)</g, (match, textContent) => {
+            let highlightedTextContent = '';
 
-        }).replace(/<head>/, (match) => {
-            // Inject dynamic styles for saccades into the head
-            return `<head><style>
-            [br-mode=on] span strong, [br-mode=on] span span {
-                opacity: var(--fixation-edge-opacity, ${genericPrefs.FIXATION_OPACITY});
-            }
-            span:not([fixation]) {
-                opacity: ${genericPrefs.NON_FIXATION_OPACITY};
-            }
-        </style>`;
+            textContent.replace(/&[a-zA-Z0-9#]+;|\S+|\s+/g, (match) => {
+                if (match.startsWith('&')) {
+                    console.log(match);
+                    highlightedTextContent += match;
+                } else {
+                    const {length} = match;
+                    const brWordStemWidth = length > 3 ? Math.round(length * Prefs.BR_WORD_STEM_PERCENTAGE) : length;
+                    const firstHalf = match.slice(0, brWordStemWidth);
+                    const secondHalf = match.slice(brWordStemWidth);
+                    highlightedTextContent += `<span ${secondHalf.length ? '' : 'fixation="true"'}><strong>${firstHalf}</strong>${secondHalf.length ? `<span>${secondHalf}</span>` : ''}</span>`;
+                }
+            });
+
+            return `>${highlightedTextContent}<`;
+            /* }).replace(/<head>/, (match) => {
+                 // Inject dynamic styles for saccades into the head
+                 return `<head>`; */
+
         }).replace(/<body>/, (match) => {
             // Add the content style to the body tag
             return `<body style="${contentStyle}">`;
         });
-
-        return enhancedHTML;
     } catch (error) {
-        // Handle errors and log them
         console.error(error);
-        // Return the original HTML in case of an error
         return htmlString;
     }
-
-    function highlightText(textContent, genericPrefs) {
-        return textContent.replace(/\p{L}+/gu, (word) => {
-            // Exclude modifying escaped characters
-
-            if (word.includes('amp')) {
-                console.log(word);
-                return word;
-            } else {
-                const {length} = word;
-                const brWordStemWidth = length > 3 ? Math.round(length * genericPrefs.BR_WORD_STEM_PERCENTAGE) : length;
-                const firstHalf = word.slice(0, brWordStemWidth);
-                const secondHalf = word.slice(brWordStemWidth);
-                return `<span ${secondHalf.length ? '' : 'fixation="true"'}><strong>${firstHalf}</strong>${secondHalf.length ? `<span>${secondHalf}</span>` : ''}</span>`;
-            }
-        });
-    }
-
-
 }
 
 
-// Check if a file path is provided as a command-line argument
 const args = process.argv.slice(2);
-
 if (args.length !== 1) {
     console.error("Please provide the path to the EPUB file as a command-line argument.");
 } else {
     const epubFilePath = args[0];
-    // Call the functions based on your requirements
     modifyEPUB(epubFilePath);
 }
